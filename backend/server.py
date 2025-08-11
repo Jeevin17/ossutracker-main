@@ -273,60 +273,50 @@ async def update_progress(course_id: str, progress_update: ProgressUpdate):
 
 @api_router.post("/sync-ossu-courses")
 async def sync_ossu_courses():
-    """Sync courses from OSSU Computer Science curriculum."""
+    """Sync courses from OSSU Computer Science curriculum by parsing the GitHub repository."""
     try:
-        # This is a simplified sync - in a real implementation, you'd parse the OSSU markdown
-        sample_courses = [
-            {
-                "title": "Introduction to Computer Science and Programming using Python",
-                "description": "This course will introduce you to the world of computer science and programming. Learn computation, imperative programming, basic data structures and algorithms.",
-                "url": "https://www.edx.org/course/introduction-computer-science-mitx-6-00-1x-10",
-                "ossu_url": "https://github.com/ossu/computer-science#intro-cs",
-                "duration_weeks": 14,
-                "effort_hours_per_week": "6-10 hours/week",
-                "prerequisites": [],
-                "category": CourseCategory.INTRO_CS,
-                "difficulty": CourseDifficulty.BEGINNER,
-                "topics_covered": ["computation", "imperative programming", "basic data structures", "algorithms"]
-            },
-            {
-                "title": "Systematic Program Design",
-                "description": "Learn functional programming, design for testing, program requirements, common design patterns, and unit testing.",
-                "url": "https://www.edx.org/course/how-code-simple-data-ubcx-htc1x",
-                "ossu_url": "https://github.com/ossu/computer-science#core-programming",
-                "duration_weeks": 13,
-                "effort_hours_per_week": "8-10 hours/week",
-                "prerequisites": [],
-                "category": CourseCategory.CORE_PROGRAMMING,
-                "difficulty": CourseDifficulty.INTERMEDIATE,
-                "topics_covered": ["functional programming", "design for testing", "program requirements", "design patterns", "unit testing"]
-            },
-            {
-                "title": "Mathematics for Computer Science",
-                "description": "Learn discrete mathematics, mathematical proofs, basic statistics, O-notation, and discrete probability.",
-                "url": "https://openlearninglibrary.mit.edu/courses/course-v1:OCW+6.042J+2T2019/about",
-                "ossu_url": "https://github.com/ossu/computer-science#core-math",
-                "duration_weeks": 13,
-                "effort_hours_per_week": "5 hours/week",
-                "prerequisites": ["Calculus 1C"],
-                "category": CourseCategory.CORE_MATH,
-                "difficulty": CourseDifficulty.INTERMEDIATE,
-                "topics_covered": ["discrete mathematics", "mathematical proofs", "statistics", "O-notation", "discrete probability"]
-            }
-        ]
+        logger.info("Starting OSSU course sync...")
+        
+        # Import the parser
+        from .ossu_parser import OSSSUCurriculumParser
+        
+        parser = OSSSUCurriculumParser()
+        course_data_list = parser.parse_ossu_curriculum()
         
         synced_count = 0
-        for course_data in sample_courses:
-            # Check if course already exists
-            existing = await db.courses.find_one({"title": course_data["title"]})
-            if not existing:
+        updated_count = 0
+        
+        for course_data in course_data_list:
+            # Check if course already exists (by title and category)
+            existing = await db.courses.find_one({
+                "title": course_data["title"],
+                "category": course_data["category"]
+            })
+            
+            if existing:
+                # Update existing course
+                await db.courses.update_one(
+                    {"id": existing["id"]},
+                    {"$set": {**course_data, "updated_at": datetime.utcnow()}}
+                )
+                updated_count += 1
+            else:
+                # Create new course
                 course = Course(**course_data)
                 await db.courses.insert_one(course.dict())
                 synced_count += 1
         
-        return {"message": f"Successfully synced {synced_count} courses from OSSU curriculum"}
+        logger.info(f"OSSU sync completed: {synced_count} new, {updated_count} updated")
+        
+        return {
+            "message": f"Successfully synced OSSU curriculum",
+            "new_courses": synced_count,
+            "updated_courses": updated_count,
+            "total_processed": len(course_data_list)
+        }
     
     except Exception as e:
+        logger.error(f"Failed to sync OSSU courses: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to sync courses: {str(e)}")
 
 @api_router.get("/categories", response_model=List[str])
