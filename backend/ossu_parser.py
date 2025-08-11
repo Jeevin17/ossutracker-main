@@ -102,34 +102,41 @@ class OSSSUCurriculumParser:
         
         # Split into lines and find table rows
         lines = table_text.split('\n')
-        table_started = False
         
-        for line in lines:
+        for i, line in enumerate(lines):
             line = line.strip()
             
-            # Skip empty lines and header separators
-            if not line or line.startswith('|---') or line.startswith('| :--'):
+            # Skip empty lines, header separators, and headers
+            if not line or line.startswith(':--') or line.startswith('|:--'):
                 continue
             
-            # Check if this is a table row with course data
-            if line.startswith('|') and '|' in line[1:]:
-                cells = [cell.strip() for cell in line.split('|')[1:-1]]  # Remove first/last empty cells
+            # Look for table rows (either with or without leading/trailing |)
+            if '|' in line:
+                # Handle both formats: |cell|cell| and cell|cell
+                if line.startswith('|') and line.endswith('|'):
+                    cells = [cell.strip() for cell in line[1:-1].split('|')]
+                else:
+                    cells = [cell.strip() for cell in line.split('|')]
                 
-                # Skip header row
-                if len(cells) >= 4 and cells[0].lower() in ['courses', 'course']:
-                    table_started = True
+                # Skip if this is a header row
+                if len(cells) >= 3 and any(header in cells[0].lower() for header in ['courses', 'course']):
                     continue
                 
-                if table_started and len(cells) >= 4:
-                    course_name = cells[0].strip()
+                # Process course rows
+                if len(cells) >= 3 and cells[0]:
+                    course_name_cell = cells[0].strip()
                     
-                    # Skip if this doesn't look like a course name
-                    if not course_name or course_name.lower() in ['courses', 'course']:
+                    # Skip empty or header-like cells
+                    if not course_name_cell or course_name_cell.lower() in ['courses', 'course']:
                         continue
                     
-                    # Extract course URL from markdown links
-                    course_url = self.extract_url_from_markdown(course_name)
-                    clean_course_name = self.clean_markdown_text(course_name)
+                    # Extract course URL and clean name
+                    course_url = self.extract_url_from_markdown(course_name_cell)
+                    clean_course_name = self.clean_markdown_text(course_name_cell)
+                    
+                    # Skip if no actual course name
+                    if not clean_course_name or len(clean_course_name) < 3:
+                        continue
                     
                     duration = cells[1].strip() if len(cells) > 1 else ""
                     effort = cells[2].strip() if len(cells) > 2 else ""
@@ -141,7 +148,7 @@ class OSSSUCurriculumParser:
                     # Parse prerequisites
                     prerequisites = self.parse_prerequisites(prerequisites_text)
                     
-                    courses.append({
+                    course_data = {
                         'title': clean_course_name,
                         'url': course_url,
                         'ossu_url': f"{self.OSSU_REPO_BASE}#{category.replace('_', '-')}",
@@ -149,8 +156,11 @@ class OSSSUCurriculumParser:
                         'effort_hours_per_week': effort,
                         'prerequisites': prerequisites,
                         'category': category,
-                        'topics_covered': []  # Will be filled later
-                    })
+                        'topics_covered': []
+                    }
+                    
+                    courses.append(course_data)
+                    logger.info(f"Parsed course: {clean_course_name}")
         
         return courses
 
