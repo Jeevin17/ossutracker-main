@@ -277,8 +277,8 @@ async def sync_ossu_courses():
     try:
         logger.info("Starting OSSU course sync...")
         
-        # Import the parser
-        from .ossu_parser import OSSSUCurriculumParser
+        # Import the parser (absolute import)
+        from ossu_parser import OSSSUCurriculumParser
         
         parser = OSSSUCurriculumParser()
         course_data_list = parser.parse_ossu_curriculum()
