@@ -106,28 +106,20 @@ class OSSSUCurriculumParser:
         for i, line in enumerate(lines):
             line = line.strip()
             
-            # Skip empty lines, header separators, and headers
-            if not line or line.startswith(':--') or line.startswith('|:--'):
+            # Skip empty lines and header separators
+            if not line or line.startswith(':--') or 'Duration' in line and 'Effort' in line:
                 continue
             
-            # Look for table rows (either with or without leading/trailing |)
+            # Look for table rows with pipe separators
             if '|' in line:
-                # Handle both formats: |cell|cell| and cell|cell
-                if line.startswith('|') and line.endswith('|'):
-                    cells = [cell.strip() for cell in line[1:-1].split('|')]
-                else:
-                    cells = [cell.strip() for cell in line.split('|')]
+                cells = [cell.strip() for cell in line.split('|')]
                 
-                # Skip if this is a header row
-                if len(cells) >= 3 and any(header in cells[0].lower() for header in ['courses', 'course']):
-                    continue
-                
-                # Process course rows
-                if len(cells) >= 3 and cells[0]:
+                # Must have at least 4 columns (course, duration, effort, prerequisites)
+                if len(cells) >= 4 and cells[0]:
                     course_name_cell = cells[0].strip()
                     
-                    # Skip empty or header-like cells
-                    if not course_name_cell or course_name_cell.lower() in ['courses', 'course']:
+                    # Skip if this looks like a header
+                    if course_name_cell.lower() in ['courses', 'course'] or not course_name_cell:
                         continue
                     
                     # Extract course URL and clean name
@@ -160,7 +152,7 @@ class OSSSUCurriculumParser:
                     }
                     
                     courses.append(course_data)
-                    logger.info(f"Parsed course: {clean_course_name}")
+                    print(f"✓ Parsed: {clean_course_name} ({category})")
         
         return courses
 
